@@ -1,0 +1,102 @@
+
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+  <title>Ferah Chat (Online)</title>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script type="module">
+    import { initializeApp } from "https://ferah-chat-8e706-default-rtdb.firebaseio.com/";
+    import { getDatabase, ref, push, onChildAdded } from "https://ferah-chat-8e706-default-rtdb.firebaseio.com/";
+
+    const firebaseConfig = {
+      apiKey: "AIzaSyBbLP9nTUbWhx5ah_41cO1ikOY9ge9eSKA",
+      authDomain: "ferah-chat-8e706.firebaseapp.com",
+      projectId: "ferah-chat-8e706",
+      databaseURL: "https://ferah-chat-8e706-default-rtdb.firebaseio.com",
+      storageBucket: "ferah-chat-8e706.firebasestorage.app",
+      messagingSenderId: "767249695828",
+      appId: "1:767249695828:web:c53b1ba1b6666adb5459c1"
+    };
+
+    const app = initializeApp(firebaseConfig);
+    const db = getDatabase(app);
+    const chatRef = ref(db, "messages");
+
+    document.addEventListener("DOMContentLoaded", () => {
+      const chatBox = document.getElementById("chatBox");
+      const sendBtn = document.getElementById("sendBtn");
+      const messageInput = document.getElementById("messageInput");
+      const usernameInput = document.getElementById("username");
+      const toggleTheme = document.getElementById("toggleTheme");
+      const emojiBtn = document.getElementById("emojiBtn");
+      const emojiPicker = document.getElementById("emojiPicker");
+      const body = document.body;
+
+      toggleTheme.addEventListener("click", () => {
+        body.classList.toggle("dark");
+      });
+
+      emojiBtn.addEventListener("click", (e) => {
+        emojiPicker.style.display = emojiPicker.style.display === "none" ? "block" : "none";
+        emojiPicker.style.left = e.pageX + "px";
+        emojiPicker.style.top = e.pageY + "px";
+      });
+
+      emojiPicker.addEventListener("emoji-click", (event) => {
+        messageInput.value += event.detail.unicode;
+        emojiPicker.style.display = "none";
+      });
+
+      sendBtn.addEventListener("click", () => {
+        const username = usernameInput.value.trim() || "Anonim";
+        const message = messageInput.value.trim();
+        if (!message) return;
+        push(chatRef, {
+          user: username,
+          text: message
+        });
+        messageInput.value = "";
+      });
+
+      onChildAdded(chatRef, (data) => {
+        const { user, text } = data.val();
+        const bubble = document.createElement("div");
+        bubble.innerHTML = `<strong>${user}:</strong> ${text}`;
+        bubble.className = "p-2 rounded my-1 " + (body.classList.contains("dark") ? "bg-gray-700 text-white" : "bg-gray-200");
+        chatBox.appendChild(bubble);
+        chatBox.scrollTop = chatBox.scrollHeight;
+      });
+    });
+  </script>
+  <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
+  <style>
+    body.dark { background-color: #1f2937; color: white; }
+  </style>
+</head>
+<body class="transition-all duration-300">
+
+  <div class="p-4 text-right">
+    <button id="toggleTheme" class="bg-gray-800 text-white px-4 py-2 rounded">🌙 Tema Değiştir</button>
+  </div>
+
+  <div class="max-w-xl mx-auto p-4">
+    <h1 class="text-2xl font-bold mb-4 text-center">Ferah Chat</h1>
+
+    <div id="chatBox" class="bg-white dark:bg-gray-800 border dark:border-gray-700 h-64 overflow-y-auto p-4 rounded mb-4"></div>
+
+    <div class="flex gap-2">
+      <input type="text" id="username" placeholder="İsmin" class="w-1/4 px-2 py-1 border rounded" />
+      <input type="text" id="messageInput" placeholder="Mesaj..." class="w-full px-2 py-1 border rounded" />
+      <button id="sendBtn" class="bg-blue-500 text-white px-4 py-1 rounded">Gönder</button>
+      <button id="emojiBtn">😀</button>
+    </div>
+
+    <emoji-picker id="emojiPicker" style="position: absolute; display: none;"></emoji-picker>
+
+    <div class="mt-4 text-center text-sm opacity-60">Yapımcı: Hamza & kankası Ferah ❤️</div>
+  </div>
+
+</body>
+</html>
