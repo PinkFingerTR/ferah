@@ -36,7 +36,60 @@
       const emojiPicker = document.getElementById("emojiPicker");
       const body = document.body;
 
+      
+      // Oda kontrol değişkenleri
+      let currentRoom = "genel";
+      let chatRef = ref(db, "rooms/" + currentRoom + "/messages");
+      let onlineRef = ref(db, "rooms/" + currentRoom + "/online");
+
+      const roomSelect = document.getElementById("roomSelect");
+      const roomPassword = document.getElementById("roomPassword");
+      const joinRoomBtn = document.getElementById("joinRoom");
+
+      joinRoomBtn.addEventListener("click", () => {
+        const selectedRoom = roomSelect.value;
+        const password = roomPassword.value.trim();
+
+        if (selectedRoom === "ozel" && password !== "1234") {
+          alert("Şifre yanlış. Lütfen geçerli bir şifre girin.");
+          return;
+        }
+
+        currentRoom = selectedRoom;
+        chatRef = ref(db, "rooms/" + currentRoom + "/messages");
+        onlineRef = ref(db, "rooms/" + currentRoom + "/online");
+
+        chatBox.innerHTML = "";
+        onlineList.innerHTML = "";
+
+        const username = usernameInput.value.trim() || "Anonim";
+        const userRef = ref(db, `rooms/${currentRoom}/online/${username}`);
+        set(userRef, true);
+        onDisconnect(userRef).remove();
+
+        onChildAdded(chatRef, (data) => {
+          const { user, text, time } = data.val();
+          const bubble = document.createElement("div");
+          bubble.innerHTML = `
+            <div class="p-2 rounded my-1 max-w-[75%] ${body.classList.contains("dark") ? "bg-gray-700 text-white" : "bg-gray-200"}">
+              <div class="text-sm font-bold">${user} <span class="text-xs opacity-70">(${time})</span></div>
+              <div>${text}</div>
+            </div>`;
+          chatBox.appendChild(bubble);
+          chatBox.scrollTop = chatBox.scrollHeight;
+          audio.play();
+        });
+
+        onChildAdded(onlineRef, (data) => {
+          const li = document.createElement("li");
+          li.textContent = data.key;
+          li.id = "user-" + data.key;
+          onlineList.appendChild(li);
+        });
+      });
+
       // Ses efekti
+
       const audio = new Audio("https://www.myinstants.com/media/sounds/bleep.mp3");
 
       toggleTheme.addEventListener("click", () => {
@@ -109,7 +162,18 @@
   </div>
 
   <div class="max-w-4xl mx-auto p-4">
-    <h1 class="text-2xl font-bold mb-4 text-center">Ferah Chat (Genel Oda)</h1>
+    
+    <h1 class="text-2xl font-bold mb-4 text-center">Ferah Chat</h1>
+    <div class="flex justify-center gap-2 mb-4">
+      <select id="roomSelect" class="border rounded px-2 py-1">
+        <option value="genel">Genel</option>
+        <option value="sohbet">Sohbet</option>
+        <option value="ozel">Özel (şifreli)</option>
+      </select>
+      <input type="password" id="roomPassword" placeholder="Oda Şifresi (gerekirse)" class="border rounded px-2 py-1" />
+      <button id="joinRoom" class="bg-green-500 text-white px-3 py-1 rounded">Odaya Gir</button>
+    </div>
+    
 
     <div class="flex gap-4">
       <div class="flex-1">
