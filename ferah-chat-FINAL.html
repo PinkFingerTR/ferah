@@ -1,201 +1,209 @@
-
+<!-- Ferah Chat Sistemi - Tam Sürüm -->
 <!DOCTYPE html>
 <html lang="tr">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-  <title>Ferah Chat (TAM SÜRÜM)</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Ferah Chat Sistemi</title>
   <script src="https://cdn.tailwindcss.com"></script>
+  <style>
+    .chat-bubble { background: #f1f5f9; padding: 8px 12px; border-radius: 12px; max-width: 75%; display: inline-block; margin-bottom: 4px; }
+    .chat-item { display: flex; align-items: flex-start; gap: 8px; margin-bottom: 8px; }
+    .chat-avatar { width: 32px; height: 32px; border-radius: 50%; position: relative; cursor: pointer; }
+    .chat-avatar:hover::after { content: attr(data-username); position: absolute; left: 40px; top: 0; background: #1e293b; color: #f1f5f9; font-size: 12px; padding: 4px 8px; border-radius: 6px; white-space: nowrap; z-index: 10; }
+  </style>
+</head>
+<body class="bg-gray-100 text-black p-4 transition-all">
+
+  <!-- Giriş Ekranı -->
+  <div id="loginScreen" class="max-w-sm mx-auto bg-white p-4 rounded shadow">
+    <h2 class="text-xl font-bold mb-2">🧑‍💻 Giriş Yap</h2>
+    <input id="username" class="w-full border p-2 mb-2" placeholder="Kullanıcı Adı" />
+    <input id="password" type="password" class="w-full border p-2 mb-2" placeholder="Şifre" />
+    <input id="roomKey" class="w-full border p-2 mb-2" placeholder="Oda Şifresi (Opsiyonel)" />
+    <button id="loginBtn" class="w-full bg-blue-600 text-white py-2 rounded">Giriş</button>
+  </div>
+
+  <!-- Sohbet Uygulaması -->
+  <div id="chatApp" class="hidden">
+    <!-- Üst Bar -->
+    <div class="flex justify-between items-center mb-2">
+      <h1 class="text-2xl font-bold">💬 Ferah Chat</h1>
+      <div class="flex gap-2">
+        <input id="newRoomName" placeholder="Yeni oda adı" class="border px-2 py-1 rounded" />
+        <input id="newRoomPassword" type="password" placeholder="Şifre (Opsiyonel)" class="border px-2 py-1 rounded" />
+        <button id="createRoomBtn" class="bg-green-600 text-white px-2 py-1 rounded">➕ Oda Kur</button>
+        <button id="exitRoomBtn" class="bg-red-600 text-white px-2 py-1 rounded">🚪 Odadan Çık</button>
+        <button id="darkToggle" class="bg-purple-600 text-white px-3 py-1 rounded">🌘 Tema</button>
+      </div>
+    </div>
+    <!-- Kullanıcı Bilgileri -->
+    <div class="text-sm mb-1">🟢 Şu an: <span id="currentUser"></span></div>
+    <div class="text-xs mb-2 text-gray-600">Online: <span id="onlineUsers"></span></div>
+
+    <!-- Chat Kutusu -->
+    <div id="chatBox" class="bg-white h-64 overflow-y-auto p-2 rounded shadow mb-2"></div>
+    <!-- Mesaj Gönderimi -->
+    <div class="flex gap-2 mb-2">
+      <input id="messageInput" class="flex-1 border p-2" placeholder="Mesaj yaz veya komut gir..." />
+      <button id="sendBtn" class="bg-blue-600 text-white px-4 rounded">Gönder</button>
+    </div>
+
+    <!-- Müzik Player -->
+    <div id="musicPlayer" class="hidden mb-2">
+      <audio id="bgMusic" controls autoplay loop class="w-full"></audio>
+    </div>
+
+    <!-- Özel Odalar Listesi -->
+    <div id="roomList" class="mt-4 text-sm">
+      <strong>Özel Odalar:</strong>
+      <div id="roomsContainer" class="mt-1"></div>
+    </div>
+  </div>
+
+  <audio id="msgSound" src="https://cdn.pixabay.com/download/audio/2022/03/15/audio_eb29c846dc.mp3" preload="auto"></audio>
+
   <script type="module">
     import { initializeApp } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-app.js";
-    import { getDatabase, ref, push, onChildAdded, onDisconnect, serverTimestamp, set } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js";
+    import { getDatabase, ref, push, onChildAdded, remove, set, get, onDisconnect, onValue } from "https://www.gstatic.com/firebasejs/11.9.1/firebase-database.js";
 
+    // Firebase yapılandırması
     const firebaseConfig = {
       apiKey: "AIzaSyBbLP9nTUbWhx5ah_41cO1ikOY9ge9eSKA",
       authDomain: "ferah-chat-8e706.firebaseapp.com",
-      projectId: "ferah-chat-8e706",
       databaseURL: "https://ferah-chat-8e706-default-rtdb.firebaseio.com",
-      storageBucket: "ferah-chat-8e706.firebasestorage.app",
+      projectId: "ferah-chat-8e706",
+      storageBucket: "ferah-chat-8e706.appspot.com",
       messagingSenderId: "767249695828",
       appId: "1:767249695828:web:c53b1ba1b6666adb5459c1"
     };
-
     const app = initializeApp(firebaseConfig);
     const db = getDatabase(app);
-    const chatRef = ref(db, "rooms/genel/messages");
-    const onlineRef = ref(db, "rooms/genel/online");
 
-    document.addEventListener("DOMContentLoaded", () => {
-      const chatBox = document.getElementById("chatBox");
-      const sendBtn = document.getElementById("sendBtn");
-      const messageInput = document.getElementById("messageInput");
-      const usernameInput = document.getElementById("username");
-      const onlineList = document.getElementById("onlineList");
-      const toggleTheme = document.getElementById("toggleTheme");
-      const emojiBtn = document.getElementById("emojiBtn");
-      const emojiPicker = document.getElementById("emojiPicker");
-      const body = document.body;
+    // DOM öğeleri
+    const loginBtn = document.getElementById('loginBtn');
+    const username = document.getElementById('username');
+    const password = document.getElementById('password');
+    const roomKey = document.getElementById('roomKey');
+    const loginScreen = document.getElementById('loginScreen');
+    const chatApp = document.getElementById('chatApp');
+    const chatBox = document.getElementById('chatBox');
+    const messageInput = document.getElementById('messageInput');
+    const sendBtn = document.getElementById('sendBtn');
+    const newRoomName = document.getElementById('newRoomName');
+    const newRoomPassword = document.getElementById('newRoomPassword');
+    const createRoomBtn = document.getElementById('createRoomBtn');
+    const exitRoomBtn = document.getElementById('exitRoomBtn');
+    const darkToggle = document.getElementById('darkToggle');
+    const onlineUsers = document.getElementById('onlineUsers');
+    const roomsContainer = document.getElementById('roomsContainer');
+    const musicPlayer = document.getElementById('musicPlayer');
+    const bgMusic = document.getElementById('bgMusic');
+    const msgSound = document.getElementById('msgSound');
 
-      
-      // Oda kontrol değişkenleri
-      let currentRoom = "genel";
-      let chatRef = ref(db, "rooms/" + currentRoom + "/messages");
-      let onlineRef = ref(db, "rooms/" + currentRoom + "/online");
+    let currentUser = '';
+    let currentRoom = '';
+    let isAdmin = false;
 
-      const roomSelect = document.getElementById("roomSelect");
-      const roomPassword = document.getElementById("roomPassword");
-      const joinRoomBtn = document.getElementById("joinRoom");
+    // Avatar ve zaman
+    const avatars = ['adventurer','bottts','thumbs'];
+    const getAvatar = user => `https://api.dicebear.com/7.x/${avatars[user.length % avatars.length]}/svg?seed=${user}`;
+    const getTime = () => new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
 
-      joinRoomBtn.addEventListener("click", () => {
-        const selectedRoom = roomSelect.value;
-        const password = roomPassword.value.trim();
+    // Giriş işlemi
+    loginBtn.addEventListener('click', async () => {
+      const u = username.value.trim();
+      const p = password.value.trim();
+      const r = roomKey.value.trim() || 'genel';
+      if (!u || !p) return alert('Kullanıcı adı ve şifre gerekli!');
 
-        if (selectedRoom === "ozel" && password !== "1234") {
-          alert("Şifre yanlış. Lütfen geçerli bir şifre girin.");
-          return;
-        }
+      const userRef = ref(db, `users/${u}`);
+      const snap = await get(userRef);
+      let role;
+      if (!snap.exists()) {
+        role = (u === 'admin' ? 'admin' : 'user');
+        await set(userRef, { password: p, role });
+      } else {
+        const data = snap.val();
+        if (data.password !== p) return alert('Şifre yanlış!');
+        role = data.role;
+      }
 
-        currentRoom = selectedRoom;
-        chatRef = ref(db, "rooms/" + currentRoom + "/messages");
-        onlineRef = ref(db, "rooms/" + currentRoom + "/online");
+      isAdmin = (role === 'admin');
+      currentUser = u;
+      currentRoom = r;
 
-        chatBox.innerHTML = "";
-        onlineList.innerHTML = "";
+      document.getElementById('currentUser').textContent = `${u}${isAdmin ? ' (Admin)' : ''}`;
+      loginScreen.style.display = 'none';
+      chatApp.style.display = 'block';
 
-        const username = usernameInput.value.trim() || "Anonim";
-        const userRef = ref(db, `rooms/${currentRoom}/online/${username}`);
-        set(userRef, true);
-        onDisconnect(userRef).remove();
-
-        onChildAdded(chatRef, (data) => {
-          const { user, text, time } = data.val();
-          const bubble = document.createElement("div");
-          bubble.innerHTML = `
-            <div class="p-2 rounded my-1 max-w-[75%] ${body.classList.contains("dark") ? "bg-gray-700 text-white" : "bg-gray-200"}">
-              <div class="text-sm font-bold">${user} <span class="text-xs opacity-70">(${time})</span></div>
-              <div>${text}</div>
-            </div>`;
-          chatBox.appendChild(bubble);
-          chatBox.scrollTop = chatBox.scrollHeight;
-          audio.play();
-        });
-
-        onChildAdded(onlineRef, (data) => {
-          const li = document.createElement("li");
-          li.textContent = data.key;
-          li.id = "user-" + data.key;
-          onlineList.appendChild(li);
-        });
-      });
-
-      // Ses efekti
-
-      const audio = new Audio("https://www.myinstants.com/media/sounds/bleep.mp3");
-
-      toggleTheme.addEventListener("click", () => {
-        body.classList.toggle("dark");
-      });
-
-      emojiBtn.addEventListener("click", (e) => {
-        emojiPicker.style.display = emojiPicker.style.display === "none" ? "block" : "none";
-        emojiPicker.style.left = e.pageX + "px";
-        emojiPicker.style.top = e.pageY + "px";
-      });
-
-      emojiPicker.addEventListener("emoji-click", (event) => {
-        messageInput.value += event.detail.unicode;
-        emojiPicker.style.display = "none";
-      });
-
-      // Giriş yapan kullanıcıyı online olarak ekle
-      let username = "";
-      usernameInput.addEventListener("change", () => {
-        username = usernameInput.value.trim() || "Anonim";
-        const userRef = ref(db, `rooms/genel/online/${username}`);
-        set(userRef, true);
-        onDisconnect(userRef).remove();
-      });
-
-      sendBtn.addEventListener("click", () => {
-        username = usernameInput.value.trim() || "Anonim";
-        const message = messageInput.value.trim();
-        if (!message) return;
-        push(chatRef, {
-          user: username,
-          text: message,
-          time: new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
-        });
-        messageInput.value = "";
-      });
-
-      onChildAdded(chatRef, (data) => {
-        const { user, text, time } = data.val();
-        const bubble = document.createElement("div");
-        bubble.innerHTML = `
-          <div class="p-2 rounded my-1 max-w-[75%] ${body.classList.contains("dark") ? "bg-gray-700 text-white" : "bg-gray-200"}">
-            <div class="text-sm font-bold">${user} <span class="text-xs opacity-70">(${time})</span></div>
-            <div>${text}</div>
-          </div>`;
-        chatBox.appendChild(bubble);
-        chatBox.scrollTop = chatBox.scrollHeight;
-        audio.play();
-      });
-
-      // Online kullanıcıları listele
-      onChildAdded(onlineRef, (data) => {
-        const li = document.createElement("li");
-        li.textContent = data.key;
-        li.id = "user-" + data.key;
-        onlineList.appendChild(li);
-      });
+      const onlRef = ref(db, `rooms/${r}/online/${u}`); set(onlRef, true); onDisconnect(onlRef).remove();
+      loadMessages(r); loadOnline(r); loadRooms();
     });
+
+    // Enter tuşu ile giriş
+    [username,password,roomKey].forEach(el=>el.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();loginBtn.click();}}));
+
+    // Mesajları yükleme
+    function loadMessages(room) {
+      chatBox.innerHTML='';
+      onChildAdded(ref(db, `rooms/${room}/messages`), data => {
+        const m = data.val(); const k = data.key;
+        const div = document.createElement('div'); div.className='chat-item';
+        div.innerHTML = `
+          <img src="${getAvatar(m.user)}" class="chat-avatar" data-username="${m.user}" />
+          <div>
+            <div class="chat-bubble"><strong>${m.user}</strong><br>${m.text}</div>
+            <div class='text-xs text-gray-500'>${m.time}</div>
+          </div>
+          ${(isAdmin||m.user===currentUser)?`<button data-key="${k}" class='deleteBtn text-red-500 text-xs ml-2'>🗑️</button>`:''}
+        `;
+        chatBox.appendChild(div); chatBox.scrollTop=chatBox.scrollHeight; msgSound.play();
+      });
+    }
+
+    // Online kullanıcılar
+    function loadOnline(room) {
+      onValue(ref(db, `rooms/${room}/online`), snap=>{ onlineUsers.textContent=snap.exists()?Object.keys(snap.val()).join(', '):''; });
+    }
+
+    // Özel odaları listele + admin silme
+    async function loadRooms() {
+      roomsContainer.innerHTML='';
+      const rs = (await get(ref(db,'rooms'))).val()||{};
+      Object.entries(rs).forEach(([rn,val])=>{
+        if(['online','messages','password'].includes(rn)) return;
+        const hasPw = val.password !== undefined;
+        const span = document.createElement('span'); span.className='inline-flex items-center mr-1 mb-1';
+        const btn = document.createElement('button'); btn.textContent=rn+(hasPw?' 🔒':''); btn.className='px-2 py-1 bg-indigo-100 rounded text-xs';
+        btn.addEventListener('click',async()=>{
+          if(hasPw){const inp=prompt('Oda şifresi:'); if(inp!==val.password) return alert('Yanlış şifre');}
+          await remove(ref(db, `rooms/${currentRoom}/online/${currentUser}`)); currentRoom=rn;
+          const onr=ref(db,`rooms/${rn}/online/${currentUser}`); set(onr,true); onDisconnect(onr).remove();
+          loadMessages(rn); loadOnline(rn);
+        }); span.appendChild(btn);
+        if(isAdmin && rn!=='genel'){ const del=document.createElement('button'); del.textContent='❌'; del.className='ml-1 text-red-600 text-xs';
+        del.addEventListener('click',async(e)=>{e.stopPropagation(); if(confirm(`${rn} odasını silmek istediğine emin misin?`)){await remove(ref(db,`rooms/${rn}`)); loadRooms();}});
+        span.appendChild(del); }
+        roomsContainer.appendChild(span);
+      });
+    }
+
+    // Mesaj silme
+    chatBox.addEventListener('click',async e=>{ if(e.target.classList.contains('deleteBtn')){ const k=e.target.getAttribute('data-key'); await remove(ref(db,`rooms/${currentRoom}/messages/${k}`)); e.target.closest('.chat-item').remove(); }});
+
+    // Mesaj gönder + Enter
+    sendBtn.addEventListener('click',async()=>{ const t=messageInput.value.trim(); if(!t)return; if(t==='/temizle'&&isAdmin){await remove(ref(db,`rooms/${currentRoom}/messages`)); chatBox.innerHTML=''; return;} if(t.startsWith('/müzik ')&&isAdmin){ const u=t.split(' ')[1]; if(u){bgMusic.src=u; bgMusic.play(); musicPlayer.style.display='block';}return;} if(t==='/sil'){const msgs=(await get(ref(db,`rooms/${currentRoom}/messages`))).val()||{}; const ent=Object.entries(msgs).filter(([_,v])=>v.user===currentUser); if(ent.length){await remove(ref(db,`rooms/${currentRoom}/messages/${ent[ent.length-1][0]}`));}messageInput.value=''; return;} await push(ref(db,`rooms/${currentRoom}/messages`),{user:currentUser,text:t,time:getTime()}); messageInput.value='';});
+    messageInput.addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); sendBtn.click(); }});
+
+    // Oda kurma
+    createRoomBtn.addEventListener('click',async()=>{ const nr=newRoomName.value.trim(); if(!nr)return alert('Oda ismi gir!'); const pw=newRoomPassword.value.trim(); const pr=ref(db,`rooms/${nr}`); const rs=(await get(pr)).val()||{}; if(rs.password && pw) return alert('Oda zaten şifreli!'); if(!rs.password && pw) await set(ref(db,`rooms/${nr}/password`),pw); await remove(ref(db,`rooms/${currentRoom}/online/${currentUser}`)); currentRoom=nr; const onr=ref(db,`rooms/${nr}/online/${currentUser}`); set(onr,true); onDisconnect(onr).remove(); loadMessages(nr); loadOnline(nr); loadRooms(); });
+
+    // Odadan çık
+    exitRoomBtn.addEventListener('click',()=>{ if(currentRoom!=='genel'){ remove(ref(db,`rooms/${currentRoom}/online/${currentUser}`)); currentRoom='genel'; const onr=ref(db,`rooms/genel/online/${currentUser}`); set(onr,true); onDisconnect(onr).remove(); loadMessages('genel'); loadOnline('genel'); }});
+
+    // Dark Mode
+    darkToggle.addEventListener('click',()=>{ const d=document.body.classList.toggle('bg-gray-800'); document.body.classList.toggle('text-gray-200',d); chatBox.classList.toggle('bg-gray-700',d); });
   </script>
-  <script type="module" src="https://cdn.jsdelivr.net/npm/emoji-picker-element@^1/index.js"></script>
-  <style>
-    body.dark { background-color: #1f2937; color: white; }
-  </style>
-</head>
-<body class="transition-all duration-300">
-
-  <div class="p-4 text-right">
-    <button id="toggleTheme" class="bg-gray-800 text-white px-4 py-2 rounded">🌙 Tema Değiştir</button>
-  </div>
-
-  <div class="max-w-4xl mx-auto p-4">
-    
-    <h1 class="text-2xl font-bold mb-4 text-center">Ferah Chat</h1>
-    <div class="flex justify-center gap-2 mb-4">
-      <select id="roomSelect" class="border rounded px-2 py-1">
-        <option value="genel">Genel</option>
-        <option value="sohbet">Sohbet</option>
-        <option value="ozel">Özel (şifreli)</option>
-      </select>
-      <input type="password" id="roomPassword" placeholder="Oda Şifresi (gerekirse)" class="border rounded px-2 py-1" />
-      <button id="joinRoom" class="bg-green-500 text-white px-3 py-1 rounded">Odaya Gir</button>
-    </div>
-    
-
-    <div class="flex gap-4">
-      <div class="flex-1">
-        <div id="chatBox" class="bg-white dark:bg-gray-800 border dark:border-gray-700 h-64 overflow-y-auto p-4 rounded mb-4"></div>
-
-        <div class="flex gap-2">
-          <input type="text" id="username" placeholder="İsmin" class="w-1/4 px-2 py-1 border rounded" />
-          <input type="text" id="messageInput" placeholder="Mesaj..." class="w-full px-2 py-1 border rounded" />
-          <button id="sendBtn" class="bg-blue-500 text-white px-4 py-1 rounded">Gönder</button>
-          <button id="emojiBtn">😀</button>
-        </div>
-        <emoji-picker id="emojiPicker" style="position: absolute; display: none;"></emoji-picker>
-      </div>
-
-      <div class="w-48 bg-gray-100 dark:bg-gray-900 p-2 rounded">
-        <h2 class="font-bold mb-2">🟢 Online Kullanıcılar</h2>
-        <ul id="onlineList" class="text-sm list-disc pl-4 space-y-1"></ul>
-      </div>
-    </div>
-
-    <div class="mt-4 text-center text-sm opacity-60">Yapımcı: Hamza & kankası Ferah ❤️</div>
-  </div>
-
 </body>
 </html>
